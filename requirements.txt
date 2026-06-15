@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlalchemy
+aiomysql
+pillow
+qrcode
+python-dotenv
+email-validator
+cryptography
+python-multipart
