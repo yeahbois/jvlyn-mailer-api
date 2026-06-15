@@ -1,5 +1,5 @@
 import os
-import smtplib
+import aiosmtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -29,6 +29,7 @@ async def get_available_mailbox():
         await session.commit()
 
         # Select available mailbox with locking
+        # Increment usage by 1 since we are sending 1 email (per order)
         query = select(MailboxCounter).where(MailboxCounter.current_usage < 100).order_by(MailboxCounter.current_usage.asc()).limit(1).with_for_update()
         result = await session.execute(query)
         mailbox = result.scalar_one_or_none()
@@ -38,7 +39,7 @@ async def get_available_mailbox():
 
         email = mailbox.mailbox_email
 
-        # Increment usage
+        # Increment usage by 1 for the email about to be sent
         mailbox.current_usage += 1
         await session.commit()
 
@@ -66,11 +67,16 @@ async def send_ticket_email(sender_email, recipient_email, ticket_paths, buyer_n
                 msg.attach(part)
 
     try:
-        # Use sync SMTP in a background task is fine for small volume,
-        # but could be improved with an async mailer if needed.
-        with smtplib.SMTP_SSL(MAIL_SERVER, MAIL_PORT) as server:
-            server.login(sender_email, MAIL_PASSWORD)
-            server.send_message(msg)
+        # Using aiosmtplib for non-blocking SMTP
+        await aiosmtplib.send(
+            msg,
+            hostname=MAIL_SERVER,
+            port=MAIL_PORT,
+            username=sender_email,
+            password=MAIL_PASSWORD,
+            use_tls=(MAIL_PORT == 465),
+            start_tls=(MAIL_PORT == 587),
+        )
         return True
     except Exception as e:
         print(f"Error sending email: {e}")
