@@ -14,17 +14,24 @@ load_dotenv()
 app = FastAPI(title="JVLYN Ticketing API")
 
 API_KEY = os.getenv("API_KEY")
+CRON_SECRET = os.getenv("CRON_SECRET")
 
 async def verify_cron_auth(request: Request):
-    # Vercel Cron sends a specific header
+    # Vercel Cron sends a specific header, but we should also verify a secret
+    # to prevent spoofing
     auth_header = request.headers.get("Authorization")
-    cron_header = request.headers.get("X-Vercel-Cron")
 
-    # Also allow API_KEY for manual testing
+    # Check for Bearer token (preferred for Vercel Cron with secret)
+    # or the shared secret in Authorization header
+    if auth_header and (auth_header == f"Bearer {CRON_SECRET}" or auth_header == f"Bearer {API_KEY}"):
+        return
+
+    # Fallback for manual testing via X-API-KEY
     api_key_header = request.headers.get("X-API-KEY")
+    if api_key_header and api_key_header == API_KEY:
+        return
 
-    if not (cron_header or api_key_header == API_KEY or (auth_header and auth_header == f"Bearer {API_KEY}")):
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    raise HTTPException(status_code=401, detail="Unauthorized")
 
 async def process_single_order(session, order_id):
     # 1. Fetch Order and Tickets
@@ -52,8 +59,10 @@ async def process_single_order(session, order_id):
             )
             ticket_paths.append(path)
 
-        # 3. Select Mailbox and Send Email
-        mailbox = await get_available_mailbox(count=len(tickets))
+        # 3. Select Mailbox (1 email per order)
+        # We find a mailbox with enough quota but don't increment yet
+        # to ensure it's only counted if sending succeeds.
+        mailbox = await get_available_mailbox()
         if mailbox:
             success = await send_ticket_email(
                 mailbox,
@@ -67,20 +76,25 @@ async def process_single_order(session, order_id):
                 for t in tickets:
                     t.ticket_status = 'sent'
                 await session.commit()
+                return True
             else:
-                # Mark as failed or leave for retry
+                # If send failed, we might want to decrement mailbox usage
+                # but get_available_mailbox already committed the increment for safety
+                # to prevent over-limit during parallel execution.
+                # However, since Vercel Cron Hobby is serial, we can adjust.
                 print(f"Failed to send email for order {order_id}")
-                # Optional: update to 'failed' if retry limit exceeded
         else:
             print(f"No available mailbox for order {order_id}")
 
+    except Exception as e:
+        print(f"Exception processing order {order_id}: {e}")
     finally:
         # 5. Cleanup temporary files
         for path in ticket_paths:
             if os.path.exists(path):
                 os.remove(path)
 
-    return True
+    return False
 
 @app.get("/api/cron/process-tickets", dependencies=[Depends(verify_cron_auth)])
 async def cron_process_tickets():
