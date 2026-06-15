@@ -1,0 +1,9 @@
+{
+  "framework": "fastapi",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "main.py"
+    }
+  ]
+}

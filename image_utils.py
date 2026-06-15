@@ -1,0 +1,80 @@
+import qrcode
+from PIL import Image, ImageDraw, ImageFont
+import os
+import textwrap
+import tempfile
+
+# Configuration
+TEMPLATE_PATH = "assets/ticket_template.jpg"
+# Vercel filesystem is read-only except for /tmp
+OUTPUT_DIR = "/tmp/temp_tickets"
+QR_DIR = "/tmp/temp_qrs"
+
+# Coordinates from snippet
+NAME_POS = (135, 455)
+JENIS_TIKET_POS = (780, 455)
+EMAIL_POS = (135, 720)
+NOMOR_PESANAN_POS = (780, 720)
+QR_POS = (445, 915)
+
+# Ensure directories exist in /tmp
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(QR_DIR, exist_ok=True)
+
+def generate_qr(data, filename):
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(data)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    path = os.path.join(QR_DIR, f"{filename}.png")
+    img.save(path)
+    return path
+
+def wrap_text(text, max_chars=20):
+    return "\n".join(textwrap.wrap(text, width=max_chars))
+
+def create_ticket(buyer_name, buyer_email, order_id, ticket_id, ticket_type):
+    if not os.path.exists(TEMPLATE_PATH):
+        # Create a dummy template for testing if it doesn't exist
+        dummy = Image.new('RGB', (1200, 1600), color=(255, 255, 255))
+        os.makedirs(os.path.dirname(TEMPLATE_PATH), exist_ok=True)
+        dummy.save(TEMPLATE_PATH)
+
+    base = Image.open(TEMPLATE_PATH).convert("RGBA")
+    draw = ImageDraw.Draw(base)
+
+    # Note: load_default() is very small and non-scalable.
+    # In a real environment, user should upload a .ttf font to assets/
+    try:
+        # Try to use a common font if available, otherwise fallback
+        font_mid = ImageFont.load_default()
+    except:
+        font_mid = ImageFont.load_default()
+
+    # Draw text
+    wrapped_name = wrap_text(buyer_name.upper(), max_chars=20)
+    draw.text(NAME_POS, wrapped_name, fill="black", font=font_mid)
+    draw.text(JENIS_TIKET_POS, str(ticket_type), fill="black", font=font_mid)
+    draw.text(EMAIL_POS, str(buyer_email), fill="black", font=font_mid)
+    draw.text(NOMOR_PESANAN_POS, f"#{order_id}", fill="black", font=font_mid)
+
+    # Generate and paste QR
+    qr_path = generate_qr(ticket_id, ticket_id)
+    qr_img = Image.open(qr_path).convert("RGBA")
+    qr_img = qr_img.resize((355, 355), Image.Resampling.NEAREST)
+
+    base.paste(qr_img, QR_POS, qr_img)
+
+    output_path = os.path.join(OUTPUT_DIR, f"ticket_{ticket_id}.png")
+    base.save(output_path)
+
+    # Cleanup QR
+    if os.path.exists(qr_path):
+        os.remove(qr_path)
+
+    return output_path
