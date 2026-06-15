@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS orders (
     buyer_email VARCHAR(255) NOT NULL,
     buyer_phone VARCHAR(50) NOT NULL,
     payment_proof VARCHAR(255),
+    price INT NOT NULL,
     total_tickets INT DEFAULT 1,
     order_status VARCHAR(50) DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

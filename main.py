@@ -34,14 +34,20 @@ async def verify_cron_auth(request: Request):
     raise HTTPException(status_code=401, detail="Unauthorized")
 
 async def process_single_order(session, order_id):
-    # 1. Fetch Order and Tickets
+    # Fetch Order dan Tiket
     order_result = await session.execute(select(Order).where(Order.id == order_id))
     order = order_result.scalar_one_or_none()
-    if not order:
+
+    # Validasi Ganda: Pastikan order ada DAN status pembayarannya wajib 'paid'
+    if not order or order.order_status != 'paid':
         return False
 
-    tickets_result = await session.execute(select(Ticket).where(Ticket.order_id == order_id, Ticket.ticket_status == 'pending_delivery'))
+    tickets_result = await session.execute(
+        select(Ticket).where(Ticket.order_id == order_id, Ticket.ticket_status == 'pending_delivery')
+    )
     tickets = tickets_result.scalars().all()
+
+    # end
 
     if not tickets:
         return False
@@ -99,10 +105,16 @@ async def process_single_order(session, order_id):
 @app.get("/api/cron/process-tickets", dependencies=[Depends(verify_cron_auth)])
 async def cron_process_tickets():
     async with AsyncSessionLocal() as session:
-        # 1. Get unique order_ids with pending tickets
-        query = select(distinct(Ticket.order_id)).where(Ticket.ticket_status == 'pending_delivery').limit(2)
+        # Modifikasi query untuk menyaring berdasarkan status pembayaran order
+        query = (
+            select(distinct(Ticket.order_id))
+            .join(Order, Ticket.order_id == Order.id)
+            .where(Ticket.ticket_status == 'pending_delivery', Order.order_status == 'paid')
+            .limit(2)
+        )
         result = await session.execute(query)
         order_ids = result.scalars().all()
+        # end salin
 
         processed_count = 0
         for oid in order_ids:

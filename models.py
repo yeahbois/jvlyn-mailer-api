@@ -9,6 +9,7 @@ class Order(Base):
     buyer_name = Column(String(255), nullable=False)
     buyer_email = Column(String(255), nullable=False)
     buyer_phone = Column(String(50), nullable=False)
+    price = Column(Integer, nullable=False)
     payment_proof = Column(String(255), nullable=True)
     total_tickets = Column(Integer, default=1)
     order_status = Column(String(50), default='pending')
