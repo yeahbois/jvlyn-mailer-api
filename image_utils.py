@@ -2,10 +2,10 @@ import qrcode
 from PIL import Image, ImageDraw, ImageFont
 import os
 import textwrap
-import tempfile
 
 # Configuration
 TEMPLATE_PATH = "assets/ticket_template.jpg"
+FONT_PATH = "assets/font.ttf"
 # Vercel filesystem is read-only except for /tmp
 OUTPUT_DIR = "/tmp/temp_tickets"
 QR_DIR = "/tmp/temp_qrs"
@@ -48,12 +48,11 @@ def create_ticket(buyer_name, buyer_email, order_id, ticket_id, ticket_type):
     base = Image.open(TEMPLATE_PATH).convert("RGBA")
     draw = ImageDraw.Draw(base)
 
-    # Note: load_default() is very small and non-scalable.
-    # In a real environment, user should upload a .ttf font to assets/
+    # Use bundled font for better readability
     try:
-        # Try to use a common font if available, otherwise fallback
-        font_mid = ImageFont.load_default()
-    except:
+        font_mid = ImageFont.truetype(FONT_PATH, 33)
+    except Exception as e:
+        print(f"Error loading font: {e}. Falling back to default.")
         font_mid = ImageFont.load_default()
 
     # Draw text

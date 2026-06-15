@@ -1,6 +1,6 @@
 import os
 from typing import List, Optional
-from fastapi import FastAPI, Header, HTTPException, BackgroundTasks, Depends
+from fastapi import FastAPI, Header, HTTPException, Depends
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from sqlalchemy import update
@@ -58,13 +58,15 @@ async def process_tickets(order: OrderRequest):
     # 3. Select Mailbox and Send Email
     mailbox = await get_available_mailbox()
     if mailbox:
-        await send_ticket_email(
+        success = await send_ticket_email(
             mailbox,
             order.buyer_email,
             ticket_paths,
             order.buyer_name,
             order.order_id
         )
+        if not success:
+             print(f"Failed to send email for order {order.order_id}")
     else:
         print(f"No available mailbox for order {order.order_id}")
 
@@ -73,10 +75,14 @@ async def process_tickets(order: OrderRequest):
         if os.path.exists(path):
             os.remove(path)
 
+    return True
+
 @app.post("/api/tickets/generate", dependencies=[Depends(verify_api_key)])
-async def generate_tickets(order: OrderRequest, background_tasks: BackgroundTasks):
-    background_tasks.add_task(process_tickets, order)
-    return {"status": "queued", "message": "Data diterima, tiket sedang diproses"}
+async def generate_tickets(order: OrderRequest):
+    # Strategy A: One Request, One Ticket (or small batches)
+    # Process synchronously to prevent Vercel from freezing the background task
+    await process_tickets(order)
+    return {"status": "success", "message": "Tiket berhasil diproses dan dikirim"}
 
 @app.get("/")
 async def root():

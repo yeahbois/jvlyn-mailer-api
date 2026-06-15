@@ -2,10 +2,18 @@
 
 API ini dibangun menggunakan FastAPI dan Python untuk menangani pembuatan tiket (image manipulation), QR Code, dan pengiriman email otomatis dengan sistem rotasi mailbox untuk menghindari limit harian.
 
-## Arsitektur
-1. **PHP Backend (Hostinger)** mengirim data pesanan ke API ini di Vercel.
-2. **FastAPI (Vercel)** menerima data, memvalidasi API Key, dan merespons cepat (`queued`).
-3. **Background Tasks** memproses pembuatan gambar tiket, mengupdate database MySQL, dan mengirim email.
+## Arsitektur & Strategi "One Request, One Ticket"
+
+Untuk mendukung **Vercel Hobby (Gratis)**, API ini menggunakan strategi pemrosesan sinkron. Hal ini dikarenakan Vercel Tier Gratis akan membekukan eksekusi segera setelah respons dikirim.
+
+**Rekomendasi Implementasi di Backend PHP (Hostinger):**
+Jangan mengirimkan seluruh data tiket dalam satu request jika jumlahnya banyak. Disarankan agar PHP melakukan looping dan memanggil API ini untuk **setiap tiket secara individual** (atau dalam kelompok kecil maksimal 2-3 tiket) agar tetap berada di bawah batas timeout 10 detik Vercel.
+
+Contoh Alur:
+1. User beli 3 tiket.
+2. PHP simpan ke DB.
+3. PHP memanggil API Vercel 3x berturut-turut (1 tiket per panggilan).
+4. Vercel memproses 1 tiket, kirim email, lalu kirim balasan `success`.
 
 ## Setup & Instalasi
 
@@ -15,7 +23,7 @@ API ini dibangun menggunakan FastAPI dan Python untuk menangani pembuatan tiket 
    pip install -r requirements.txt
    ```
 3. **Konfigurasi Environment**:
-   Salin `.env.example` menjadi `.env` dan isi dengan kredensial yang sesuai:
+   Salin `.env.example` menjadi `.env` dan isi dengan kredensial yang sesuai.
    - `API_KEY`: Token rahasia untuk autentikasi.
    - `DB_*`: Kredensial database MySQL.
    - `MAIL_*`: Kredensial SMTP Hostinger.
@@ -52,9 +60,8 @@ API ini dibangun menggunakan FastAPI dan Python untuk menangani pembuatan tiket 
 ## Cara Debugging
 
 1. **Log Server**: Jika dijalankan secara lokal, periksa output terminal uvicorn.
-2. **Testing Script**: Gunakan `test_api.py` untuk menguji endpoint secara cepat.
-3. **Unit Test**: Jalankan `python3 test_logic.py` untuk memverifikasi logika background processing tanpa memerlukan koneksi database/SMTP asli.
-4. **Temporary Files**: Folder `temp_tickets` digunakan sementara untuk menyimpan gambar tiket sebelum dikirim, dan akan dihapus otomatis setelah email terkirim.
+2. **Unit Test**: Jalankan `python3 test_logic.py` (jika tersedia) untuk memverifikasi logika.
+3. **Temporary Files**: API menggunakan `/tmp` untuk penyimpanan sementara gambar agar kompatibel dengan filesystem read-only Vercel.
 
 ## Deployment di Vercel
-Pastikan file `main.py` dapat diakses oleh Vercel. Anda mungkin perlu menambahkan file `vercel.json` jika diperlukan konfigurasi khusus.
+Pastikan file `main.py` dan `vercel.json` sudah benar. Endpoint akan otomatis terpetakan sebagai serverless function.
