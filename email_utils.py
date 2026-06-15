@@ -16,7 +16,7 @@ MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
 MAIL_PORT = int(os.getenv("MAIL_PORT", 465))
 MAIL_SERVER = os.getenv("MAIL_SERVER")
 
-async def get_available_mailbox():
+async def get_available_mailbox(count=1):
     async with AsyncSessionLocal() as session:
         today = date.today()
 
@@ -29,7 +29,8 @@ async def get_available_mailbox():
         await session.commit()
 
         # Select available mailbox with locking
-        query = select(MailboxCounter).where(MailboxCounter.current_usage < 100).order_by(MailboxCounter.current_usage.asc()).limit(1).with_for_update()
+        # Find mailbox that has enough quota left (current_usage + count <= 100)
+        query = select(MailboxCounter).where(MailboxCounter.current_usage + count <= 100).order_by(MailboxCounter.current_usage.asc()).limit(1).with_for_update()
         result = await session.execute(query)
         mailbox = result.scalar_one_or_none()
 
@@ -38,8 +39,8 @@ async def get_available_mailbox():
 
         email = mailbox.mailbox_email
 
-        # Increment usage
-        mailbox.current_usage += 1
+        # Increment usage by the number of tickets sent
+        mailbox.current_usage += count
         await session.commit()
 
         return email
@@ -66,8 +67,6 @@ async def send_ticket_email(sender_email, recipient_email, ticket_paths, buyer_n
                 msg.attach(part)
 
     try:
-        # Use sync SMTP in a background task is fine for small volume,
-        # but could be improved with an async mailer if needed.
         with smtplib.SMTP_SSL(MAIL_SERVER, MAIL_PORT) as server:
             server.login(sender_email, MAIL_PASSWORD)
             server.send_message(msg)

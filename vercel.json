@@ -5,5 +5,11 @@
       "source": "/(.*)",
       "destination": "main.py"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/process-tickets",
+      "schedule": "*/2 * * * *"
+    }
   ]
 }
