@@ -38,23 +38,22 @@ async def process_single_order(session, order_id):
     order_result = await session.execute(select(Order).where(Order.id == order_id))
     order = order_result.scalar_one_or_none()
 
-    # Validasi Ganda: Pastikan order ada DAN status pembayarannya wajib 'paid'
-    if not order or order.order_status != 'paid':
-        return False
+    if not order:
+        return {"ok": False, "reason": "order_not_found"}
+    if order.order_status != 'paid':
+        return {"ok": False, "reason": f"order_status_is_{order.order_status}"}
 
     tickets_result = await session.execute(
         select(Ticket).where(Ticket.order_id == order_id, Ticket.ticket_status == 'pending_delivery')
     )
     tickets = tickets_result.scalars().all()
 
-    # end
-
     if not tickets:
-        return False
+        return {"ok": False, "reason": "no_pending_tickets"}
 
     ticket_paths = []
     try:
-        # 2. Generate images
+        # Generate ticket images
         for t in tickets:
             path = create_ticket(
                 order.buyer_name,
@@ -65,63 +64,58 @@ async def process_single_order(session, order_id):
             )
             ticket_paths.append(path)
 
-        # 3. Select Mailbox (1 email per order)
-        # We find a mailbox with enough quota but don't increment yet
-        # to ensure it's only counted if sending succeeds.
+        # Select available mailbox
         mailbox = await get_available_mailbox()
-        if mailbox:
-            success = await send_ticket_email(
-                mailbox,
-                order.buyer_email,
-                ticket_paths,
-                order.buyer_name,
-                order.id
-            )
-            if success:
-                # 4. Update Database to 'sent'
-                for t in tickets:
-                    t.ticket_status = 'sent'
-                await session.commit()
-                return True
-            else:
-                # If send failed, we might want to decrement mailbox usage
-                # but get_available_mailbox already committed the increment for safety
-                # to prevent over-limit during parallel execution.
-                # However, since Vercel Cron Hobby is serial, we can adjust.
-                print(f"Failed to send email for order {order_id}")
+        if not mailbox:
+            return {"ok": False, "reason": "no_available_mailbox"}
+
+        success = await send_ticket_email(
+            mailbox,
+            order.buyer_email,
+            ticket_paths,
+            order.buyer_name,
+            order.id
+        )
+        if success:
+            for t in tickets:
+                t.ticket_status = 'sent'
+            await session.commit()
+            return {"ok": True, "reason": "sent", "mailbox": mailbox, "tickets_sent": len(tickets)}
         else:
-            print(f"No available mailbox for order {order_id}")
+            return {"ok": False, "reason": "smtp_send_failed", "mailbox": mailbox}
 
     except Exception as e:
-        print(f"Exception processing order {order_id}: {e}")
+        return {"ok": False, "reason": f"exception: {str(e)}"}
     finally:
-        # 5. Cleanup temporary files
         for path in ticket_paths:
             if os.path.exists(path):
                 os.remove(path)
 
-    return False
-
 @app.get("/api/cron/process-tickets", dependencies=[Depends(verify_cron_auth)])
 async def cron_process_tickets():
     async with AsyncSessionLocal() as session:
-        # Modifikasi query untuk menyaring berdasarkan status pembayaran order
         query = (
             select(distinct(Ticket.order_id))
             .join(Order, Ticket.order_id == Order.id)
             .where(Ticket.ticket_status == 'pending_delivery', Order.order_status == 'paid')
-            .limit(2)
+            .limit(10)
         )
         result = await session.execute(query)
         order_ids = result.scalars().all()
-        # end salin
 
-        processed_count = 0
+        results = []
         for oid in order_ids:
-            if await process_single_order(session, oid):
-                processed_count += 1
+            outcome = await process_single_order(session, oid)
+            results.append({"order_id": oid, **outcome})
 
-    return {"status": "success", "processed_orders": processed_count}
+        processed_count = sum(1 for r in results if r.get("ok"))
+
+    return {
+        "status": "success",
+        "found_orders": len(order_ids),
+        "processed_orders": processed_count,
+        "details": results
+    }
 
 @app.get("/")
 async def root():
