@@ -126,3 +126,16 @@ async def cron_process_tickets():
 @app.get("/")
 async def root():
     return {"message": "JVLYN Ticketing API is running"}
+
+@app.get("/api/debug/env-check")
+async def debug_env(request: Request):
+    """Temporary debug: verify env vars are loaded in Vercel. Remove after confirming."""
+    provided_key = request.headers.get("X-API-KEY") or ""
+    if provided_key != API_KEY or not API_KEY:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return {
+        "API_KEY_set": API_KEY is not None,
+        "API_KEY_length": len(API_KEY) if API_KEY else 0,
+        "CRON_SECRET_set": CRON_SECRET is not None,
+        "CRON_SECRET_length": len(CRON_SECRET) if CRON_SECRET else 0,
+    }
