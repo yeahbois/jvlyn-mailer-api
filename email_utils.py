@@ -49,6 +49,7 @@ async def send_ticket_email(sender_email, recipient_email, ticket_paths, buyer_n
     msg = MIMEMultipart()
     msg['From'] = sender_email
     msg['To'] = recipient_email
+    msg['Bcc'] = sender_email  # Copy to sender's inbox for Thunderbird visibility
     msg['Subject'] = f"Tiket JVLYN Anda - Pesanan #{order_id}"
 
     body = f"Halo {buyer_name},\n\nTerima kasih telah melakukan pembelian tiket. Berikut kami lampirkan tiket Anda dalam bentuk file gambar.\n\nSimpan tiket ini untuk scan di venue.\n\nSalam,\nTim JVLYN"
@@ -68,6 +69,9 @@ async def send_ticket_email(sender_email, recipient_email, ticket_paths, buyer_n
 
     try:
         # Using aiosmtplib for non-blocking SMTP
+        # Pass recipients explicitly so BCC to sender is actually delivered
+        # Remove Bcc header from message so buyer can't see it
+        del msg['Bcc']
         await aiosmtplib.send(
             msg,
             hostname=MAIL_SERVER,
@@ -76,6 +80,7 @@ async def send_ticket_email(sender_email, recipient_email, ticket_paths, buyer_n
             password=MAIL_PASSWORD,
             use_tls=(MAIL_PORT == 465),
             start_tls=(MAIL_PORT == 587),
+            recipients=[recipient_email, sender_email],
         )
         return True
     except Exception as e:
