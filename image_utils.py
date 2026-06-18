@@ -11,11 +11,11 @@ OUTPUT_DIR = "/tmp/temp_tickets"
 QR_DIR = "/tmp/temp_qrs"
 
 # Coordinates from snippet
-NAME_POS = (135, 455)
-JENIS_TIKET_POS = (780, 455)
-EMAIL_POS = (135, 720)
-NOMOR_PESANAN_POS = (780, 720)
-QR_POS = (445, 915)
+NAME_POS = (641, 866)
+JENIS_TIKET_POS = (641, 1023)
+EMAIL_POS = (641, 699)
+NOMOR_PESANAN_POS = (52, 1262)
+QR_POS = (137, 667)
 
 # Ensure directories exist in /tmp
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -41,7 +41,7 @@ def wrap_text(text, max_chars=20):
 def create_ticket(buyer_name, buyer_email, order_id, ticket_id, ticket_type):
     if not os.path.exists(TEMPLATE_PATH):
         # Create a dummy template for testing if it doesn't exist
-        dummy = Image.new('RGB', (1200, 1600), color=(255, 255, 255))
+        dummy = Image.new('RGB', (1410, 2000), color=(255, 255, 255))
         os.makedirs(os.path.dirname(TEMPLATE_PATH), exist_ok=True)
         dummy.save(TEMPLATE_PATH)
 
@@ -61,11 +61,12 @@ def create_ticket(buyer_name, buyer_email, order_id, ticket_id, ticket_type):
     draw.text(JENIS_TIKET_POS, str(ticket_type), fill="black", font=font_mid)
     draw.text(EMAIL_POS, str(buyer_email), fill="black", font=font_mid)
     draw.text(NOMOR_PESANAN_POS, f"#{order_id}", fill="black", font=font_mid)
+    draw.text((571, 1362), "Sabtu, 18 Juli 2026", fill="black", font=font_mid)
 
     # Generate and paste QR
     qr_path = generate_qr(ticket_id, ticket_id)
     qr_img = Image.open(qr_path).convert("RGBA")
-    qr_img = qr_img.resize((355, 355), Image.Resampling.NEAREST)
+    qr_img = qr_img.resize((374, 374), Image.Resampling.NEAREST)
 
     base.paste(qr_img, QR_POS, qr_img)
 
