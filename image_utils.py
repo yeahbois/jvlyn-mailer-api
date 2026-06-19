@@ -11,10 +11,10 @@ OUTPUT_DIR = "/tmp/temp_tickets"
 QR_DIR = "/tmp/temp_qrs"
 
 # Coordinates from snippet
-NAME_POS = (641, 866)
-JENIS_TIKET_POS = (641, 1023)
-EMAIL_POS = (641, 699)
-NOMOR_PESANAN_POS = (52, 1262)
+EMAIL_POS = (641, 855)
+JENIS_TIKET_POS = (641, 1020)
+NAME_POS = (641, 695)
+NOMOR_PESANAN_POS = (52, 1255)
 QR_POS = (137, 667)
 
 # Ensure directories exist in /tmp
@@ -61,7 +61,7 @@ def create_ticket(buyer_name, buyer_email, order_id, ticket_id, ticket_type):
     draw.text(JENIS_TIKET_POS, str(ticket_type), fill="black", font=font_mid)
     draw.text(EMAIL_POS, str(buyer_email), fill="black", font=font_mid)
     draw.text(NOMOR_PESANAN_POS, f"#{order_id}", fill="black", font=font_mid)
-    draw.text((571, 1362), "Sabtu, 18 Juli 2026", fill="black", font=font_mid)
+    draw.text((571, 1347), "Sabtu, 18 Juli 2026", fill="black", font=font_mid)
 
     # Generate and paste QR
     qr_path = generate_qr(ticket_id, ticket_id)
